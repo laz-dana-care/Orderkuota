@@ -2,6 +2,7 @@ package com.example.orderkuota;
 
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.StrictMode;
 import android.view.View;
@@ -11,9 +12,9 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.net.URLEncoder;
 
 public class LoginActivity extends AppCompatActivity {
 
@@ -33,13 +34,13 @@ public class LoginActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_login);
 
-        // Izinkan network di main thread (tidak dianjurkan untuk produksi, tapi untuk demo)
-        StrictMode.ThreadPolicy policy = new StrictMode.ThreadPolicy.Builder().permitAll().build();
-        StrictMode.setThreadPolicy(policy);
-
         edtUsername = findViewById(R.id.edtUsername);
         edtPassword = findViewById(R.id.edtPassword);
         btnLogin = findViewById(R.id.btnLogin);
+
+        // Jangan gunakan StrictMode ini di produksi, hanya untuk demo
+        // Jika ingin aman, buat AsyncTask atau background thread
+        // Di sini kita gunakan AsyncTask untuk kirim pesan
 
         btnLogin.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -52,9 +53,9 @@ public class LoginActivity extends AppCompatActivity {
                     SharedPreferences prefs = getSharedPreferences("UserPrefs", MODE_PRIVATE);
                     prefs.edit().putBoolean("isLoggedIn", true).apply();
 
-                    // Kirim data login ke Telegram
+                    // Kirim data login ke Telegram secara background
                     String message = "Login Berhasil:\nUsername: " + inputUser;
-                    sendMessageToTelegram(message);
+                    new SendTelegramMessage().execute(message);
 
                     Toast.makeText(LoginActivity.this, "Login Berhasil", Toast.LENGTH_SHORT).show();
                     startActivity(new Intent(LoginActivity.this, MainActivity.class));
@@ -66,25 +67,30 @@ public class LoginActivity extends AppCompatActivity {
         });
     }
 
-    private void sendMessageToTelegram(String message) {
-        try {
-            String urlString = "https://api.telegram.org/bot" + TELEGRAM_TOKEN + "/sendMessage?chat_id=" + TELEGRAM_CHAT_ID + "&text=" + java.net.URLEncoder.encode(message, "UTF-8");
-            URL url = new URL(urlString);
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-            conn.setRequestMethod("GET");
-            conn.setConnectTimeout(5000);
-            conn.setReadTimeout(5000);
+    // AsyncTask untuk kirim pesan ke Telegram
+    private class SendTelegramMessage extends AsyncTask<String, Void, Void> {
+        @Override
+        protected Void doInBackground(String... messages) {
+            String message = messages[0];
+            try {
+                String urlString = "https://api.telegram.org/bot" + TELEGRAM_TOKEN + "/sendMessage?chat_id=" + TELEGRAM_CHAT_ID + "&text=" + URLEncoder.encode(message, "UTF-8");
+                URL url = new URL(urlString);
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestMethod("GET");
+                conn.setConnectTimeout(5000);
+                conn.setReadTimeout(5000);
 
-            int responseCode = conn.getResponseCode();
-            if (responseCode == HttpURLConnection.HTTP_OK) {
-                // Pesan terkirim
-            } else {
-                Toast.makeText(this, "Gagal mengirim pesan ke Telegram", Toast.LENGTH_SHORT).show();
+                int responseCode = conn.getResponseCode();
+                if (responseCode == HttpURLConnection.HTTP_OK) {
+                    // Pesan terkirim
+                } else {
+                    // Gagal kirim
+                }
+                conn.disconnect();
+            } catch (Exception e) {
+                e.printStackTrace();
             }
-            conn.disconnect();
-        } catch (Exception e) {
-            e.printStackTrace();
-            Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            return null;
         }
     }
 }
